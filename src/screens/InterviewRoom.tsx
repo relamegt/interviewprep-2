@@ -49,7 +49,6 @@ export default function InterviewRoom({ session, user, onEnd }: InterviewRoomPro
   const [isSidebarOpen, setIsSidebarOpen] = useState(false);
   const [textInput, setTextInput] = useState('');
   const [ending, setEnding] = useState(false);
-  const [currentAgentCaption, setCurrentAgentCaption] = useState<string>('');
   
   const timerRef = useRef<any>(null);
   const scrollRef = useRef<HTMLDivElement>(null);
@@ -81,10 +80,6 @@ export default function InterviewRoom({ session, user, onEnd }: InterviewRoomPro
     setTranscript(prev => {
       if (prev.length === 0) return [turn];
       
-      if (turn.speaker === 'interviewer') {
-        setCurrentAgentCaption(turn.text);
-      }
-
       const last = prev[prev.length - 1];
       
       // Heuristic for merging streaming updates from the same speaker
@@ -252,23 +247,20 @@ export default function InterviewRoom({ session, user, onEnd }: InterviewRoomPro
               
               {/* Live Caption Overlay (Agent Speech) */}
               <AnimatePresence>
-                {currentAgentCaption && (
+                {isSpeaking && transcript.length > 0 && transcript[transcript.length-1].speaker === 'interviewer' && (
                   <motion.div
-                    key={currentAgentCaption}
                     initial={{ opacity: 0, scale: 0.9, y: 10 }}
                     animate={{ opacity: 1, scale: 1, y: 0 }}
                     exit={{ opacity: 0, scale: 0.9 }}
-                    className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-full max-w-sm text-center z-30 px-4"
+                    className="absolute -bottom-24 left-1/2 -translate-x-1/2 w-full max-w-sm text-center z-30"
                   >
-                    <div className="bg-zinc-900/95 backdrop-blur-xl px-6 py-4 rounded-3xl border border-teal-500/30 shadow-[0_0_50px_rgba(0,0,0,0.8)] ring-1 ring-white/10">
+                    <div className="bg-zinc-900/90 backdrop-blur-xl px-6 py-4 rounded-3xl border border-teal-500/30 shadow-[0_0_50px_rgba(0,0,0,0.8)] ring-1 ring-white/10">
                       <div className="flex items-center gap-2 mb-2 justify-center">
-                        <span className={cn("w-1.5 h-1.5 rounded-full bg-teal-500", isSpeaking && "animate-pulse")} />
-                        <span className="text-[10px] uppercase font-black tracking-widest text-teal-400/80">
-                          {isSpeaking ? "Agent Speaking" : "Last Message"}
-                        </span>
+                        <span className="w-1.5 h-1.5 rounded-full bg-teal-500 animate-pulse" />
+                        <span className="text-[10px] uppercase font-black tracking-widest text-teal-400/80">Agent Speaking</span>
                       </div>
-                      <p className="text-sm font-medium leading-relaxed text-zinc-100 max-h-[100px] overflow-y-auto no-scrollbar">
-                        {currentAgentCaption}
+                      <p className="text-sm font-medium leading-relaxed text-zinc-100">
+                        {transcript[transcript.length-1].text}
                       </p>
                     </div>
                   </motion.div>
@@ -477,62 +469,29 @@ export default function InterviewRoom({ session, user, onEnd }: InterviewRoomPro
             initial={{ opacity: 0 }}
             animate={{ opacity: 1 }}
             exit={{ opacity: 0 }}
-            className="fixed inset-0 z-50 flex items-center justify-center bg-black/95 backdrop-blur-xl"
+            className="fixed inset-0 z-50 flex items-center justify-center bg-black/80 backdrop-blur-sm"
           >
-            <div className="text-center space-y-8 max-w-sm px-8">
-              <div className="relative mx-auto w-32 h-32">
-                {/* Orbital Layers */}
-                <motion.div 
-                  animate={{ rotate: 360 }}
-                  transition={{ duration: 4, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-0 border-[1px] border-teal-500/20 rounded-full" 
-                />
-                <motion.div 
-                  animate={{ rotate: -360 }}
-                  transition={{ duration: 8, repeat: Infinity, ease: "linear" }}
-                  className="absolute inset-4 border-[1px] border-indigo-500/20 rounded-full" 
-                />
-                {/* Main Spinner */}
-                <div className="absolute inset-0 border-t-2 border-teal-500 rounded-full animate-spin shadow-[0_0_15px_rgba(20,184,166,0.3)]" />
-                
-                <div className="absolute inset-0 flex items-center justify-center">
-                  <div className="w-2 h-2 rounded-full bg-teal-500 animate-pulse shadow-[0_0_10px_rgba(20,184,166,1)]" />
-                </div>
+            <div className="text-center space-y-6 max-w-sm px-6">
+              <div className="relative mx-auto w-24 h-24">
+                <div className="absolute inset-0 border-4 border-teal-500/20 rounded-full" />
+                <div className="absolute inset-0 border-4 border-t-teal-500 rounded-full animate-spin" />
               </div>
-
-              <div className="space-y-6">
-                <div className="space-y-3">
-                  <h2 className="text-3xl font-black tracking-tight text-white uppercase italic italic italic">Pulse Link</h2>
-                  <div className="space-y-2">
-                    <p className="text-teal-400 text-[10px] uppercase tracking-[0.3em] font-black">Establishing Connection</p>
-                    <p className="text-zinc-500 text-xs leading-relaxed max-w-[240px] mx-auto">
-                      Synchronizing with the neural panel. This typically takes 3-5 seconds depending on link speed.
-                    </p>
-                  </div>
+              <div className="space-y-4 pt-4">
+                <div className="space-y-2">
+                  <h2 className="text-2xl font-bold">Initializing Pulse</h2>
+                  <p className="text-zinc-400 text-sm leading-relaxed">
+                    Connecting to the Gemini Live server carefully to ensure high-fidelity voice transmission.
+                  </p>
                 </div>
-
-                <div className="pt-4 flex flex-col gap-4 items-center">
-                  <div className="flex gap-1">
-                    {[0, 1, 2].map((i) => (
-                      <motion.div
-                        key={i}
-                        animate={{ opacity: [0.3, 1, 0.3] }}
-                        transition={{ duration: 1, repeat: Infinity, delay: i * 0.2 }}
-                        className="w-1.5 h-1.5 rounded-full bg-teal-500"
-                      />
-                    ))}
-                  </div>
-                  
-                  <button 
-                    onClick={() => {
-                      disconnect();
-                      forceFallback();
-                    }}
-                    className="text-[10px] text-zinc-600 hover:text-white uppercase tracking-widest font-bold transition-all border-b border-transparent hover:border-zinc-700"
-                  >
-                    Bypass to Text Mode
-                  </button>
-                </div>
+                <button 
+                  onClick={() => {
+                    disconnect();
+                    forceFallback();
+                  }}
+                  className="text-xs text-zinc-500 hover:text-teal-400 underline transition-colors"
+                >
+                  Taking too long? Start in Text Mode
+                </button>
               </div>
             </div>
           </motion.div>

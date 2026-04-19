@@ -51,27 +51,11 @@ export default function SetupWizard({ user, onComplete, onBack }: SetupWizardPro
   const [difficulty, setDifficulty] = useState<Difficulty>('Medium');
   const [duration, setDuration] = useState(30);
   const [resumeFile, setResumeFile] = useState<File | null>(null);
-  const [resumeTextManual, setResumeTextManual] = useState('');
-  const [isUploading, setIsUploading] = useState(false);
 
-  const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+  const handleFileUpload = (e: React.ChangeEvent<HTMLInputElement>) => {
     if (e.target.files?.[0]) {
-      const file = e.target.files[0];
-      setResumeFile(file);
+      setResumeFile(e.target.files[0]);
       setError(null);
-
-      // Attempt to read as text immediately for context
-      if (file.type === "text/plain" || file.name.endsWith('.txt')) {
-        const reader = new FileReader();
-        reader.onload = (event) => {
-          setResumeTextManual(event.target?.result as string);
-        };
-        reader.readAsText(file);
-      } else {
-        // For PDF/Docx, we might not be able to read purely in browser without heavy libs
-        // So we prompt the user to paste text if they want maximum accuracy
-        setError("Note: Automated text extraction from non-txt files is limited. For best results, paste your resume text below.");
-      }
     }
   };
 
@@ -87,10 +71,28 @@ export default function SetupWizard({ user, onComplete, onBack }: SetupWizardPro
     setLoading(true);
     setError(null);
     try {
-      // Background the storage upload to avoid blocking the user
+      let resumeUrl = '';
+      let resumeText = '';
+      
+      // Fast path: If there's a file, try to read it as text for the AI context immediately
       if (resumeFile) {
-        const storageRef = ref(storage, `resumes/${user.uid}/${Date.now()}_${resumeFile.name}`);
-        uploadBytes(storageRef, resumeFile).catch(e => console.warn("Background upload failed:", e));
+        resumeText = `Context from file: ${resumeFile.name}. Type: ${resumeFile.type}. Size: ${Math.round(resumeFile.size / 1024)}KB.`;
+        
+        // Start upload in background but track its promise
+        const uploadTask = (async () => {
+          try {
+            const storageRef = ref(storage, `resumes/${user.uid}/${Date.now()}_${resumeFile.name}`);
+            const snapshot = await uploadBytes(storageRef, resumeFile);
+            return await getDownloadURL(snapshot.ref);
+          } catch (e) {
+            console.warn("Background upload failed, session will proceed without URL:", e);
+            return '';
+          }
+        })();
+
+        // Add a 2s timeout for the "Preparing..." spinner to keep it snappy
+        const timeoutPromise = new Promise<string>((resolve) => setTimeout(() => resolve(''), 2000));
+        resumeUrl = await Promise.race([uploadTask, timeoutPromise]);
       }
 
       const sessionData = {
@@ -101,22 +103,21 @@ export default function SetupWizard({ user, onComplete, onBack }: SetupWizardPro
         interviewType,
         difficulty,
         plannedDuration: duration,
-        resumeUrl: '', // URL will be empty since we didn't wait, but text is what matters
-        resumeText: resumeTextManual, 
+        resumeUrl,
+        resumeText,
         status: 'pending',
         transcript: [],
         createdAt: serverTimestamp(),
         updatedAt: serverTimestamp()
       };
 
-      // Direct write to DB and immediate navigation
       const docRef = await addDoc(collection(db, 'sessions'), sessionData);
       onComplete({ id: docRef.id, ...sessionData } as any);
     } catch (err: any) {
-      console.error("Startup error:", err);
-      setError(err.message || "Failed to start the Pulse session.");
+      console.error("Setup failed:", err);
+      setError(err.message || "An unexpected error occurred while preparing your session.");
     } finally {
-      // We don't necessarily need to set loading to false if we are navigating away
+      setLoading(false);
     }
   };
 
@@ -212,20 +213,6 @@ export default function SetupWizard({ user, onComplete, onBack }: SetupWizardPro
                       <div className="text-xs text-zinc-500 mt-1">PDF, Word, or TXT — Used for context</div>
                     </div>
                   </div>
-
-                  <div className="luxury-card space-y-4">
-                    <div className="flex items-center justify-between">
-                      <label className="text-xs font-bold uppercase text-zinc-500">Resume Content (Paste for best results)</label>
-                      {resumeTextManual && <span className="text-[10px] text-teal-500 font-bold uppercase italic truncate max-w-[100px]">Text Loaded</span>}
-                    </div>
-                    <textarea 
-                      value={resumeTextManual}
-                      onChange={(e) => setResumeTextManual(e.target.value)}
-                      placeholder="Paste your resume text here to ensure the AI knows exactly what your skills and experiences are..."
-                      className="w-full bg-black/50 border border-white/5 rounded-xl p-4 min-h-[140px] focus:border-teal-500/50 outline-none transition-all text-xs"
-                    />
-                  </div>
-
                   <div className="luxury-card space-y-2">
                     <label className="text-xs font-bold uppercase text-zinc-500">Job Description</label>
                     <textarea 
@@ -330,7 +317,7 @@ export default function SetupWizard({ user, onComplete, onBack }: SetupWizardPro
             disabled={loading}
             className="btn-primary min-w-[140px] flex items-center justify-center gap-2"
           >
-            {loading ? 'Launching Pulse Hub...' : currentStep === STEPS.length - 1 ? 'Start Pulse' : 'Continue'}
+            {loading ? 'Preparing...' : currentStep === STEPS.length - 1 ? 'Start Pulse' : 'Continue'}
             {!loading && <ArrowRight className="w-4 h-4" />}
           </button>
         </footer>
