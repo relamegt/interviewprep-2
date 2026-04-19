@@ -1,0 +1,8 @@
+{
+  "name": "InterviewPulse final working",
+  "description": "Premium minimal-luxury, voice-first AI interview prep app powered by Gemini Live API.",
+  "requestFramePermissions": [
+    "microphone"
+  ],
+  "majorCapabilities": []
+}

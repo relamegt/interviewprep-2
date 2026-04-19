@@ -1,0 +1,31 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    // Shared Helpers
+    function isSignedIn() { return request.auth != null; }
+    function isOwner(userId) { return isSignedIn() && request.auth.uid == userId; }
+    function isValidId(id) { return id is string && id.size() <= 128 && id.matches('^[a-zA-Z0-9_\\-]+$'); }
+    function isValidTimestamp(ts) { return ts == request.time; }
+
+    match /{document=**} {
+      allow read, write: if false;
+    }
+
+    match /sessions/{sessionId} {
+      allow create: if isSignedIn() && 
+        request.resource.data.userId == request.auth.uid &&
+        request.resource.data.status == 'pending' &&
+        request.resource.data.createdAt == request.time;
+        
+      allow read: if isOwner(resource.data.userId);
+      
+      allow update: if isOwner(resource.data.userId) && (
+        // Allow updating transcript and status during the interview
+        (request.resource.data.diff(resource.data).affectedKeys().hasOnly(['transcript', 'status', 'debrief', 'updatedAt'])) &&
+        request.resource.data.updatedAt == request.time
+      );
+      
+      allow delete: if isOwner(resource.data.userId);
+    }
+  }
+}

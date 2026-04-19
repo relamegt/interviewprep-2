@@ -1,0 +1,28 @@
+{
+  "entities": {
+    "InterviewSession": {
+      "title": "Interview Session",
+      "description": "A recording and analysis of a mock interview session.",
+      "type": "object",
+      "properties": {
+        "userId": { "type": "string" },
+        "companyName": { "type": "string" },
+        "website": { "type": "string", "format": "url" },
+        "interviewType": { "type": "string", "enum": ["HR", "Technical", "Coding", "Situational", "Custom"] },
+        "difficulty": { "type": "string", "enum": ["Easy", "Medium", "Hard"] },
+        "status": { "type": "string", "enum": ["pending", "active", "completed", "ended_early"] },
+        "transcript": { "type": "array" },
+        "debrief": { "type": "object" },
+        "createdAt": { "type": "string", "format": "date-time" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "companyName", "status", "createdAt"]
+    }
+  },
+  "firestore": {
+    "/sessions/{sessionId}": {
+      "schema": "InterviewSession",
+      "description": "Stores individual mock interview records."
+    }
+  }
+}

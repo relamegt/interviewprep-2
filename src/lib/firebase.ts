@@ -1,0 +1,29 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import { initializeApp } from 'firebase/app';
+import { getAuth, GoogleAuthProvider } from 'firebase/auth';
+import { getFirestore, doc, getDocFromServer } from 'firebase/firestore';
+import { getStorage } from 'firebase/storage';
+import firebaseConfig from '../../firebase-applet-config.json';
+
+const app = initializeApp(firebaseConfig);
+export const auth = getAuth(app);
+export const db = getFirestore(app, firebaseConfig.firestoreDatabaseId);
+export const storage = getStorage(app);
+export const googleProvider = new GoogleAuthProvider();
+
+async function testConnection() {
+  try {
+    // Attempt to read a dummy doc to verify connection
+    await getDocFromServer(doc(db, 'system', 'connection_test'));
+  } catch (error: any) {
+    if (error?.message?.includes('the client is offline')) {
+      console.error("Firebase is offline. Please check your configuration.");
+    }
+  }
+}
+
+testConnection();
