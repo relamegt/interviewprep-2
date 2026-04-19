@@ -21,8 +21,14 @@ export const INTERVIEWER_SYSTEM_PROMPTS = {
     ONCE THE INTERVIEW STARTS: 
     - You MUST use the provided RESUME CONTEXT and JOB DESCRIPTION to ask specific, deep questions. 
     - Do not just rely on what they tell you in the intro. 
+    - The RESUME CONTEXT may be raw text; parse it carefully for skills, achievements, and dates.
     - Reference their specific projects, skills, or certifications from the resume. 
     - Contrast their answers against the requirements in the job description.
+    
+    HALLUCINATION PROTECTION: 
+    - Do NOT ask about skills or companies that are NOT in the resume or the job description. 
+    - If the user says something that isn't on the resume, ask for clarifying details rather than assuming it's true.
+    - Stay grounded in the provided facts.
     
     Rules:
     - Difficulty: ${difficulty}.
@@ -40,9 +46,14 @@ export const INTERVIEWER_SYSTEM_PROMPTS = {
     
     TECHNICAL CONTEXT:
     - You have their RESUME and a JOB DESCRIPTION. Use them.
+    - The RESUME CONTEXT may be raw text; parse it carefully for technical depth, tech stacks, and architectural decisions.
     - Ask about specific technologies mentioned in their resume.
     - Ask "how-to" and "why" questions about their past projects.
     - If the JD requires a skill they haven't mentioned, ask them about it.
+    
+    HALLUCINATION PROTECTION: 
+    - Do NOT invent technologies the candidate doesn't have.
+    - Only probe into technologies they explicitly list or those required by the JD.
     
     Rules:
     - Difficulty: ${difficulty}.

@@ -71,6 +71,7 @@ export default function App() {
       {currentScreen === 'interview' && activeSession && (
         <InterviewRoom 
           session={activeSession} 
+          user={user}
           onEnd={handleInterviewEnd} 
         />
       )}

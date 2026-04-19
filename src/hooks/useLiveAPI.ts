@@ -25,6 +25,12 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
   const [error, setError] = useState<string | null>(null);
   const [isSpeaking, setIsSpeaking] = useState(false);
   const [volume, setVolume] = useState(0);
+  const [isMuted, setIsMuted] = useState(false);
+  const isMutedRef = useRef(false);
+
+  useEffect(() => {
+    isMutedRef.current = isMuted;
+  }, [isMuted]);
   
   const aiRef = useRef<any>(null);
   const sessionRef = useRef<any>(null);
@@ -34,6 +40,7 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
   const playQueueRef = useRef<Int16Array[]>([]);
   const isPlayingRef = useRef(false);
   const nextPlayTimeRef = useRef(0);
+  const activeSourcesRef = useRef<AudioBufferSourceNode[]>([]);
   
   const reconnectCountRef = useRef(0);
   const MAX_RECONNECTS = 2;
@@ -88,6 +95,10 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
             const processor = audioContext.createScriptProcessor(4096, 1, 1);
             
             processor.onaudioprocess = (e) => {
+              if (isMutedRef.current) {
+                setVolume(0);
+                return;
+              }
               const inputData = e.inputBuffer.getChannelData(0);
               // Calculate volume for UI
               let sum = 0;
@@ -112,11 +123,15 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
             processor.connect(audioContext.destination);
           },
           onmessage: async (message: LiveServerMessage) => {
-            // Handle Model Transcriptions
-            if (message.serverContent?.modelTurn?.parts) {
-              const text = message.serverContent.modelTurn.parts
-                .filter(p => p.text)
-                .map(p => p.text)
+            // Log for debugging (optional, but helps catch schema shifts)
+            const content = message.serverContent as any;
+            
+            // Handle Model Transcriptions (Output)
+            // They often come as 'text' parts inside 'modelTurn'
+            if (content?.modelTurn?.parts) {
+              const text = content.modelTurn.parts
+                .filter((p: any) => p.text)
+                .map((p: any) => p.text)
                 .join("");
               
               if (text) {
@@ -129,12 +144,22 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
               }
             }
 
-            // Handle User Transcriptions (inputAudioTranscription)
-            const userTurn = (message.serverContent as any)?.userTurn;
-            if (userTurn?.parts) {
-              const text = (userTurn.parts as any[])
-                .filter(p => p.text)
-                .map(p => p.text)
+            // Handle User Transcriptions (Input)
+            // For inputAudioTranscription enabled, it often comes in 'inputAudioTranscription' field
+            if (content?.inputAudioTranscription?.transcript) {
+              onTranscriptUpdate({
+                speaker: 'user',
+                text: content.inputAudioTranscription.transcript,
+                timestamp_start: new Date().toISOString(),
+                timestamp_end: new Date().toISOString()
+              });
+            }
+
+            // Fallback for older/other formats like userTurn
+            if (content?.userTurn?.parts) {
+              const text = content.userTurn.parts
+                .filter((p: any) => p.text)
+                .map((p: any) => p.text)
                 .join("");
               
               if (text) {
@@ -148,7 +173,7 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
             }
             
             // Handle audio output
-            const base64Audio = message.serverContent?.modelTurn?.parts?.find(p => p.inlineData)?.inlineData?.data;
+            const base64Audio = content?.modelTurn?.parts?.find((p: any) => p.inlineData)?.inlineData?.data;
             if (base64Audio) {
               const binary = atob(base64Audio);
               const bytes = new Uint8Array(binary.length);
@@ -172,6 +197,11 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
                 source.start(startTime);
                 nextPlayTimeRef.current = startTime + (buffer.duration / source.playbackRate.value);
                 
+                activeSourcesRef.current.push(source);
+                source.onended = () => {
+                  activeSourcesRef.current = activeSourcesRef.current.filter(s => s !== source);
+                };
+
                 setIsSpeaking(true);
                 // Reset isSpeaking after the audio finishes playing
                 setTimeout(() => {
@@ -183,7 +213,11 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
             }
 
             if (message.serverContent?.interrupted) {
-              // Handle interruption
+              // Handle interruption: Stop all current playback sources immediately
+              activeSourcesRef.current.forEach(source => {
+                try { source.stop(); } catch (e) { /* ignore */ }
+              });
+              activeSourcesRef.current = [];
               nextPlayTimeRef.current = 0;
               setIsSpeaking(false);
             }
@@ -246,6 +280,8 @@ export function useLiveAPI({ systemInstruction, onTranscriptUpdate, onSessionEnd
     error,
     isSpeaking,
     volume,
+    isMuted,
+    setIsMuted,
     connect,
     disconnect,
     sendMessage,
